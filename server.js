@@ -165,7 +165,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Endpoint de santé
+// Endpoint de santé et routes personnalisées
 httpServer.on('request', (req, res) => {
   // Ajouter les headers CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -179,12 +179,7 @@ httpServer.on('request', (req, res) => {
     return;
   }
 
-  // Laisser Socket.IO gérer ses propres routes
-  if (req.url && req.url.startsWith('/socket.io/')) {
-    // Laisser Socket.IO gérer cette route
-    return;
-  }
-
+  // Routes personnalisées (avant Socket.IO)
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -193,6 +188,7 @@ httpServer.on('request', (req, res) => {
       connections: io.engine.clientsCount,
       sessions: sessionUsers.size
     }));
+    return;
   } else if (req.url === '/emit' && req.method === 'POST') {
     // Endpoint pour émettre des événements depuis Laravel
     let body = '';
@@ -218,6 +214,7 @@ httpServer.on('request', (req, res) => {
         res.end(JSON.stringify({ error: 'Invalid JSON' }));
       }
     });
+    return;
   } else if (req.url === '/' || req.url === '') {
     // Route racine
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -227,15 +224,11 @@ httpServer.on('request', (req, res) => {
       status: 'running',
       timestamp: new Date().toISOString()
     }));
-  } else {
-    // Route non trouvée
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      error: 'Not Found',
-      message: 'Route not found',
-      available_routes: ['/health', '/emit', '/socket.io/']
-    }));
+    return;
   }
+
+  // Pour toutes les autres routes (y compris Socket.IO), laisser le serveur HTTP gérer
+  // Socket.IO va automatiquement intercepter les routes /socket.io/
 });
 
 // Démarrer le serveur
