@@ -35,7 +35,7 @@ httpServer.on('request', (req, res) => {
     return;
   }
 
-  // Laisser Socket.IO gérer ses propres routes EN PREMIER
+  // LAISSER SOCKET.IO GÉRER SES ROUTES EN PREMIER
   if (req.url && req.url.startsWith('/socket.io/')) {
     // Ne rien faire ici, Socket.IO va automatiquement gérer
     return;
