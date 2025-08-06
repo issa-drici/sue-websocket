@@ -18,7 +18,7 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket'] // Uniquement WebSocket, pas de polling
 });
 
 // Gestion des requêtes HTTP
