@@ -1,10 +1,12 @@
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
 
 // Configuration
 const PORT = process.env.WEBSOCKET_PORT || 6001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:8000';
+
+// Stockage des utilisateurs connectés par session
+const sessionUsers = new Map();
 
 // Créer le serveur HTTP
 const httpServer = createServer();
@@ -19,8 +21,77 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling']
 });
 
-// Stockage des utilisateurs connectés par session
-const sessionUsers = new Map();
+// Gestion des requêtes HTTP
+httpServer.on('request', (req, res) => {
+  // Ajouter les headers CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, X-Auth-Token, X-Requested-With, Accept, Authorization, X-CSRF-TOKEN, XSRF-TOKEN, X-Socket-Id');
+
+  // Gérer les requêtes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  // Routes personnalisées
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      connections: io.engine.clientsCount,
+      sessions: sessionUsers.size
+    }));
+  } else if (req.url === '/emit' && req.method === 'POST') {
+    // Endpoint pour émettre des événements depuis Laravel
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        const { event, data } = JSON.parse(body);
+
+        if (event && data) {
+          // Émettre l'événement à tous les clients connectés
+          io.emit(event, data);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, event, data }));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Event and data required' }));
+        }
+      } catch (error) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+  } else if (req.url === '/' || req.url === '') {
+    // Route racine
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      message: 'Alarrache WebSocket Server',
+      version: '1.0.0',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    }));
+  } else if (req.url && req.url.startsWith('/socket.io/')) {
+    // Laisser Socket.IO gérer ses propres routes
+    // Ne rien faire ici, Socket.IO va automatiquement gérer
+    return;
+  } else {
+    // Route non trouvée
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Not Found',
+      message: 'Route not found',
+      available_routes: ['/health', '/emit', '/socket.io/']
+    }));
+  }
+});
 
 console.log('🚀 Serveur WebSocket démarré sur le port', PORT);
 console.log('📡 CORS configuré pour:', CORS_ORIGIN);
@@ -163,72 +234,6 @@ io.on('connection', (socket) => {
   socket.on('ping', () => {
     socket.emit('pong');
   });
-});
-
-// Endpoint de santé et routes personnalisées
-httpServer.on('request', (req, res) => {
-  // Ajouter les headers CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, X-Auth-Token, X-Requested-With, Accept, Authorization, X-CSRF-TOKEN, XSRF-TOKEN, X-Socket-Id');
-
-  // Gérer les requêtes OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    res.end();
-    return;
-  }
-
-  // Routes personnalisées (avant Socket.IO)
-  if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      connections: io.engine.clientsCount,
-      sessions: sessionUsers.size
-    }));
-    return;
-  } else if (req.url === '/emit' && req.method === 'POST') {
-    // Endpoint pour émettre des événements depuis Laravel
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
-    });
-    req.on('end', () => {
-      try {
-        const { event, data } = JSON.parse(body);
-
-        if (event && data) {
-          // Émettre l'événement à tous les clients connectés
-          io.emit(event, data);
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true, event, data }));
-        } else {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Event and data required' }));
-        }
-      } catch (error) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid JSON' }));
-      }
-    });
-    return;
-  } else if (req.url === '/' || req.url === '') {
-    // Route racine
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      message: 'Alarrache WebSocket Server',
-      version: '1.0.0',
-      status: 'running',
-      timestamp: new Date().toISOString()
-    }));
-    return;
-  }
-
-  // Pour toutes les autres routes (y compris Socket.IO), laisser le serveur HTTP gérer
-  // Socket.IO va automatiquement intercepter les routes /socket.io/
 });
 
 // Démarrer le serveur
