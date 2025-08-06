@@ -167,6 +167,24 @@ io.on('connection', (socket) => {
 
 // Endpoint de santé
 httpServer.on('request', (req, res) => {
+  // Ajouter les headers CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, X-Auth-Token, X-Requested-With, Accept, Authorization, X-CSRF-TOKEN, XSRF-TOKEN, X-Socket-Id');
+
+  // Gérer les requêtes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  // Laisser Socket.IO gérer ses propres routes
+  if (req.url && req.url.startsWith('/socket.io/')) {
+    // Laisser Socket.IO gérer cette route
+    return;
+  }
+
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -200,6 +218,23 @@ httpServer.on('request', (req, res) => {
         res.end(JSON.stringify({ error: 'Invalid JSON' }));
       }
     });
+  } else if (req.url === '/' || req.url === '') {
+    // Route racine
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      message: 'Alarrache WebSocket Server',
+      version: '1.0.0',
+      status: 'running',
+      timestamp: new Date().toISOString()
+    }));
+  } else {
+    // Route non trouvée
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Not Found',
+      message: 'Route not found',
+      available_routes: ['/health', '/emit', '/socket.io/']
+    }));
   }
 });
 
