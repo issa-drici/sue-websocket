@@ -35,7 +35,13 @@ httpServer.on('request', (req, res) => {
     return;
   }
 
-  // Routes personnalisées
+  // Laisser Socket.IO gérer ses propres routes EN PREMIER
+  if (req.url && req.url.startsWith('/socket.io/')) {
+    // Ne rien faire ici, Socket.IO va automatiquement gérer
+    return;
+  }
+
+  // Routes personnalisées (après Socket.IO)
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -78,10 +84,6 @@ httpServer.on('request', (req, res) => {
       status: 'running',
       timestamp: new Date().toISOString()
     }));
-  } else if (req.url && req.url.startsWith('/socket.io/')) {
-    // Laisser Socket.IO gérer ses propres routes
-    // Ne rien faire ici, Socket.IO va automatiquement gérer
-    return;
   } else {
     // Route non trouvée
     res.writeHead(404, { 'Content-Type': 'application/json' });
